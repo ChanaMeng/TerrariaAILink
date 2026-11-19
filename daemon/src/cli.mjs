@@ -64,6 +64,23 @@ try {
     case 'chat':
       out(await get('/chat?since=' + (rest[0] ?? 0)));
       break;
+    case 'brief': {
+      const st = await get('/status');
+      const chat = await get('/chat?since=0');
+      const ev = await get('/events?since=0');
+      out({
+        link: st.link,
+        mode: st.mode?.name ?? null,
+        player: st.player,
+        hostiles: st.hostiles,
+        boss: st.boss,
+        chat: (chat.lines ?? []).slice(-5).map((l) => l.text),
+        events: (ev.events ?? []).slice(-6).map((e) => e.type),
+        lastSeq: st.lastSeq,
+        chatSeq: chat.lastSeq,
+      });
+      break;
+    }
     case 'stop':
       out(await post('/mode', { name: 'release', params: {} }));
       break;
