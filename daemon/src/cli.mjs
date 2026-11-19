@@ -88,6 +88,26 @@ try {
       if (asJson) out(res.data); else console.log(res.text);
       break;
     }
+    case 'policy': {
+      const sub = rest[0] ?? 'get';
+      if (sub === 'get') { out(await get('/policy')); break; }
+      if (sub === 'set') {
+        let raw = rest[1];
+        // PowerShell 给原生命令传参会吞掉 JSON 里的双引号，所以支持从文件读。
+        // 记事本存的 JSON 常带 BOM，这里一并剥掉。
+        if (raw === '--file') raw = fs.readFileSync(rest[2], 'utf8').replace(/^\uFEFF/, '');
+        if (!raw) throw new Error('policy set <json> 或 policy set --file <path>，例如 {"group":"gather","params":{"dir":"right"}}');
+        out(await post('/policy', JSON.parse(raw)));
+        break;
+      }
+      throw new Error('policy get | policy set <json> | policy set --file <path>');
+    }
+    case 'decision': {
+      const sub = rest[0] ?? 'get';
+      if (sub === 'get') { out(await get('/decision')); break; }
+      if (sub === 'clear' || sub === 'ack') { out(await post('/decision/ack', {})); break; }
+      throw new Error('decision get | decision clear');
+    }
     case 'stop':
       out(await post('/mode', { name: 'release', params: {} }));
       break;
@@ -120,7 +140,7 @@ try {
       break;
     }
     default:
-      console.log('tailink <status|brief|mode|mv|goto|attack|boss|build|say|stop|tiles|events|state>');
+      console.log('tailink <status|brief|policy|decision|mode|mv|goto|attack|boss|build|say|stop|tiles|events|state>');
   }
 } catch (e) {
   console.error('error:', e.message);

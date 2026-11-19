@@ -1,6 +1,9 @@
 import http from 'node:http';
 import { API_PORT } from './proto.mjs';
 import { buildBrief } from './brief.mjs';
+import {
+  applyPolicy, clearDecision, knownGroups, readDecision, readPolicy, writePolicy,
+} from './policy.mjs';
 
 export function createApi(ctx) {
   const { world, client, manager } = ctx;
@@ -14,6 +17,28 @@ export function createApi(ctx) {
       }
       if (req.method === 'GET' && url.pathname === '/brief') {
         return ok(res, buildBrief(ctx));
+      }
+      if (req.method === 'GET' && url.pathname === '/policy') {
+        return ok(res, {
+          current: ctx.policy ?? null,
+          file: readPolicy(),
+          groups: knownGroups(),
+        });
+      }
+      if (req.method === 'POST' && url.pathname === '/policy') {
+        const body = await readBody(req);
+        const written = writePolicy(body);
+        const applied = applyPolicy(ctx, written, 'http');
+        return ok(res, { ok: applied, policy: written });
+      }
+      if (req.method === 'GET' && url.pathname === '/decision') {
+        return ok(res, { file: readDecision(), current: ctx.decision ?? null });
+      }
+      if (req.method === 'POST' && url.pathname === '/decision/ack') {
+        const removed = clearDecision();
+        ctx.decision = null;
+        ctx.event('decision_ack', { fileRemoved: removed });
+        return ok(res, { ok: true, fileRemoved: removed });
       }
       if (req.method === 'GET' && url.pathname === '/events') {
         const since = Number(url.searchParams.get('since') ?? 0);
