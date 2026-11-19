@@ -86,6 +86,14 @@ TerrariaAILink is a tModLoader mod, so it follows tModLoader's rules:
 - The bridge binds **127.0.0.1 only** and has no authentication. Any local process can control the player while the mod is loaded -- do not run untrusted software alongside it.
 - Intended for **single-player and private co-op**. Do not use it on servers where automation is prohibited.
 
+## Docs
+
+- [`docs/design.md`](docs/design.md) -- what it is for, who it is for, the three-layer model (muscle / senses / will).
+- [`docs/dev.md`](docs/dev.md) -- repo layout, how to add a mode or a guard, conventions.
+- [`docs/progress.md`](docs/progress.md) -- milestones and current state.
+- [`docs/test.md`](docs/test.md) -- what has actually been tested, with evidence.
+- [`docs/architecture.md`](docs/architecture.md), [`docs/protocol.md`](docs/protocol.md) -- technical reference.
+
 ## License
 
 MIT. See `LICENSE` and `NOTICE`. Inspired by [TerraBlind](https://github.com/Reisenbug/TerraBlind) (MIT); no TerraBlind source code is included.
@@ -99,3 +107,4 @@ MIT. See `LICENSE` and `NOTICE`. Inspired by [TerraBlind](https://github.com/Rei
 - 协议是 127.0.0.1 上的行分隔 JSON，换成 Python/Go 客户端也行。
 - 联机必须都用 tModLoader 1.4.4.9，mod 清单一致；原版 1.4.5 进不来。
 - 仅限单机/私人联机；不要在禁止自动化的服务器上用。
+- 方向、做法、进度、测过什么，都在 `docs/` 四份纸里：`design.md` / `dev.md` / `progress.md` / `test.md`。
