@@ -19,15 +19,20 @@ terraria/
 │  └─ build.txt                tModLoader 版本/作者元数据
 ├─ daemon/                    Node 客户端（无依赖）
 │  ├─ src/
-│  │  ├─ main.mjs             入口：组装 world/client/dodge/manager/api
+│  │  ├─ main.mjs             入口：组装 world/client/dodge/manager/api；policy 热加载
 │  │  ├─ proto.mjs            NDJSON 协议、端口、neutral() 帧
 │  │  ├─ world.mjs            状态缓存、敌我查询、瓦片解码
 │  │  ├─ modes.mjs            模式（= 策略组的执行体）与 ModeManager
+│  │  ├─ guard.mjs            守护层：低血/Boss/死亡/背包满，带冷却
+│  │  ├─ policy.mjs           policy.json / decision.json 文件桥
+│  │  ├─ brief.mjs            战况摘要：一屏中文 + 结构化 data
 │  │  ├─ bt.mjs               极小程序化行为树（sequence/selector/action）
 │  │  ├─ dodge.mjs            弹幕外推 + 候选动作评分闪避
-│  │  ├─ server.mjs           HTTP 127.0.0.1:17891（status/events/mode/cmd）
+│  │  ├─ server.mjs           HTTP 127.0.0.1:17891（status/brief/policy/decision/mode/cmd）
 │  │  ├─ cli.mjs              命令行入口
 │  │  └─ watch.mjs            守聊天（轮询，命中关键词才叫醒）
+│  ├─ state/                  policy.json / decision.json（运行时生成，已 gitignore）
+│  ├─ test/                   node:test 单元测试（brief/guard/policy/modes）
 │  ├─ tools/mockmod.mjs       无游戏时的假 mod（联调协议用）
 │  └─ package.json
 ├─ docs/                      本目录（四份纸 + 架构/协议）
@@ -38,10 +43,12 @@ terraria/
 ## 2. 数据流
 
 ```
-state（每 tick 上行）   mod --{t:"state",p,n,pr,it,...}--> daemon --(内存)--> mode.tick()
+state（每 tick 上行）   mod --{t:"state",p,n,pr,it,...}--> daemon --(内存)--> guard → mode.tick()
 input（每 tick 下行）   daemon --{t:"input",...}--> mod --(control*)--> 角色
 tiles（按需上行）       daemon 发 {t:"cmd",op:"tiles",...}，mod 回 {t:"tiles",d:base64}
 chat（双向）            mod --{t:"chat"}--> daemon；daemon 发 {op:"say",...} --> mod
+policy（文件，200ms）   鲸白 --写 policy.json--> daemon --applyPolicy--> 换组
+decision（文件，异步）  daemon --写 decision.json--> 鲸白读；90s 无回答用 default 继续
 ```
 
 **关键约定：一 tick 一帧。** mod 推一行状态，daemon 回一行输入。没有积压、没有队列补帧。
@@ -51,6 +58,9 @@ chat（双向）            mod --{t:"chat"}--> daemon；daemon 发 {op:"say",..
 | 文件 | 职责 | 改动风险 |
 | --- | --- | --- |
 | `modes.mjs` | 策略组的执行体；`ModeManager.set()` 换组 | 中：行为都在这里 |
+| `guard.mjs` | 保命/止损的硬规则，带冷却 | 中：误触发会把组抢走 |
+| `policy.mjs` | 文件桥 + 热加载 + 决策请求 | 低 |
+| `brief.mjs` | 状态 → 一屏战况 | 低 |
 | `world.mjs` | 状态索引；`boss()/hostiles()/tileAt()` | 低 |
 | `dodge.mjs` | 弹幕闪避，独立的伺服层 | 高：碰它会晕 |
 | `proto.mjs` | 协议与常量 | 低（改端口要两边同步） |
@@ -104,27 +114,49 @@ gather: (c, p) => new GatherMode(c, p),
 
 ## 6. 怎么加一个守护条件
 
-守护层在 `ModeManager.tick()` 里、`mode.tick()` 之前插入（计划中，当前只有 dodge 这一个外部伺服）：
+守护层是 `daemon/src/guard.mjs`。`ModeManager.tick()` 在 `current.tick()` **之前**调 `evaluateGuards(ctx)`，命中就 `set()` 并本帧不发输入。
+
+规则写成独立纯函数，加进 `RULES` 数组：
 
 ```js
-// guard.mjs（待建）
-export function applyGuards(ctx, frame) {
+export function ruleLowHp(ctx) {
   const p = ctx.world.p;
-  if (p && p.hp < p.mhp * 0.3 && ctx.manager.name !== 'survive') {
-    ctx.event('guard', { kind: 'low_hp', hp: p.hp });
-    ctx.manager.set('survive', { reason: 'low_hp' });
-    return true; // 已接管，本帧不再跑原组
-  }
-  return false;
+  if (!p || p.dead || ctx.manager.name === 'survive') return null;
+  if (!(p.hp < p.mhp * 0.3)) return null;
+  return { kind: 'low_hp', reason: 'low_hp', group: 'survive', params: { reason: 'low_hp' } };
 }
 ```
 
 规矩：
 - 守护只做保命/止损，不做长期规划
-- 每个守护有**冷却**，防抖
-- 触发必发事件（`guard`），鲸白读得到
+- 每个守护在 `COOLDOWNS` 里有**冷却**，防抖
+- 触发必发 `guard` 事件，鲸白读得到
+- `group: null` 表示「只报事件、不切组」（如 `inventory_full`）
 
-## 7. 怎么加一个原子动作
+## 7. 策略组怎么换（policy 文件桥）
+
+鲸白不直接调 HTTP，而是写文件；daemon 200ms 轮询热加载：
+
+```
+daemon/state/policy.json    { "group": "gather", "params": { "dir": "right" }, "reason": "..." }
+daemon/state/decision.json  { seq, at, kind, summary, options, default, expiresAt }
+```
+
+- 写 `policy.json` → `applyPolicy()` → `mode_change` + `policy_applied`
+- 非法组 → `policy_rejected`，保持原组
+- 组退出（`goal_done`/`stuck`/`no_target`/`timeout`）→ `requestDecision()` 写 `decision.json`，**不阻塞**
+- 90 秒没人回答 → 用 `default` 组继续，事件 `decision_timeout`
+
+`daemon/state/` 已在 `.gitignore`。命令行：
+
+```powershell
+node src/cli.mjs policy get
+node src/cli.mjs policy set --file policy.json   # PowerShell 内联 JSON 会被吞引号
+node src/cli.mjs decision
+node src/cli.mjs decision clear
+```
+
+## 8. 怎么加一个原子动作
 
 原子动作走 `cmd`，不占模式：
 
@@ -138,7 +170,7 @@ if (op === 'craft') {
 
 mod 侧在 `BridgeSystem` 的 action 分发里加一个 case。**动作必须验证结果**：做了没、数量变没、失败原因，作为事件回到 daemon（对照 `build_step` 的做法）。
 
-## 8. 约定
+## 9. 约定
 
 - **tick 里不许 await、不许网络、不许读大文件**。要异步的东西进事件队列。
 - **每个组必须有退出条件**，并且退出要发事件。
@@ -147,7 +179,7 @@ mod 侧在 `BridgeSystem` 的 action 分发里加一个 case。**动作必须验
 - **不写绝对路径进仓库**（公开仓库），路径写在 `local.props` / 环境变量。
 - **事件是给鲸白读的，日志是给人看的**，别混。
 
-## 9. 调试速查
+## 10. 调试速查
 
 ```powershell
 node src/cli.mjs brief                 # 状态+聊天+事件，一条拿全
@@ -158,7 +190,7 @@ node src/cli.mjs events 0              # 读全部事件
 node src/cli.mjs say 内容
 ```
 
-## 10. 版本与兼容
+## 11. 版本与兼容
 
 - tModLoader `1.4.4.9`（2026.09 stable）唯一支持。
 - 原版 Terraria `1.4.5.x` 不兼容：`build.txt` / `TerrariaAILink.csproj` 引的是 tML 的 1.4.4.9 程序集。

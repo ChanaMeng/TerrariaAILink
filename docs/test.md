@@ -37,14 +37,18 @@
 
 | ID | 用例 | 前置 | 步骤 | 期望 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| TC-20 | 战况摘要准确性 | 游戏在跑 | `brief` | 血量/威胁/背包/目标与游戏内一致，无幻觉字段 | mock 通过 |
-| TC-21 | 策略组热切换 | 正在 gather | 写 `policy.json` 切 build | 当前动作收尾后切组，不停在半空 | 待测 |
-| TC-22 | 守护·低血 | HP 人为降到 25% | 观察 | 0.5s 内切 `survive`，发 `guard` 事件 | 待测 |
-| TC-23 | 守护·卡住 | 走到墙角 | 持续 3s | 不无限跳，发 `stuck`，3 次后呼救 | 待测 |
-| TC-24 | 自主循环不卡死 | 无指令挂机 10 分钟 | 观察 | 有产出、不死、不卡同一动作 | 待测 |
-| TC-25 | 决策请求超时 | 停掉鲸白 | 触发一次 goal_done | 90s 后用 default 组继续 | 待测 |
-| TC-26 | 合成门 | 有木材 + 工作台 | `craft` 门 | 背包出现门，可放置 | 待测 |
-| TC-27 | 房屋合法性 | 盖好的屋子 | `house check` | 判定合法/列出缺什么 | 待测 |
+| TC-20 | 战况摘要准确性 | 游戏在跑 | `brief` | 血量/威胁/背包/目标与游戏内一致，无幻觉字段 | mock 通过（真机待测） |
+| TC-21 | 策略组热切换 | 正在 gather | 写 `policy.json` 切 build | 当前动作收尾后切组，不停在半空 | mock 通过：`policy set` → `policy_applied`，`status.mode.name` 变化 |
+| TC-22 | 守护·低血 | HP 人为降到 25% | 观察 | 0.5s 内切 `survive`，发 `guard` 事件 | mock/单测通过（真机待测） |
+| TC-23 | 各组卡住退出 | 走到墙角 | 持续 | 不无限跳，发 `stuck` 并退出 | 单测通过（`fight` 6s、`explore` 8s、`survive` 跳+一次 stuck） |
+| TC-24 | 自主循环不卡死 | 无指令挂机 10 分钟 | 观察 | 有产出、不死、不卡同一动作 | 待测（自主循环未做） |
+| TC-25 | 决策请求超时 | 停掉鲸白 | 触发一次 goal_done | 90s 后用 default 组继续 | mock 通过（字段/回落逻辑单测；未真等 90s） |
+| TC-26 | 合成门 | 有木材 + 工作台 | `craft` 门 | 背包出现门，可放置 | 待测（craft 未做） |
+| TC-27 | 房屋合法性 | 盖好的屋子 | `house check` | 判定合法/列出缺什么 | 待测（未做） |
+| TC-28 | 战斗四步 | 目标 25 格 / 2 格 | `combat` 一帧 | 远处朝目标走；近处 aim + use | 单测通过（回归 `selector→sequence` bug） |
+| TC-29 | 决策接口 | daemon 在跑 | `decision` / `decision clear` | 返回 decision.json，clear 后为空 | mock 通过 |
+
+> 2026-11-20 补充：TC-28 抓到真 bug——`CombatMode` 的树用了 `selector`，选完目标就短路，**移动/瞄准/攻击从来没执行过**。已改 `sequence` 并加回归测试。
 
 ## 4. 回归清单（每次改 mod 或 daemon 后过一遍）
 
@@ -55,6 +59,9 @@
 5. 切 `idle` → 角色停住，不再发输入
 6. 停 daemon → 角色松手（15 tick 后释放）
 7. 重进世界 → 能重连，不残留旧组
+8. `cd daemon; node --test` → 44 条全绿
+9. 写 `daemon/state/policy.json` → 200ms 内 `status.mode.name` 跟着变
+10. `brief` → 一屏中文，无 `undefined` / `NaN`
 
 ## 5. 记录格式
 
