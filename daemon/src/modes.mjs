@@ -259,6 +259,7 @@ export class BuildMode extends Mode {
     }
 
     f.aim = [(tx - p.x) / PX, (ty - p.y) / PX];
+    f.use = true;
     if (step.slot != null) f.slot = step.slot;
     else if (this.params.slot != null) f.slot = this.params.slot;
     this.useTicks++;

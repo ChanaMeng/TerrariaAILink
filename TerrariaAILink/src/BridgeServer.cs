@@ -270,6 +270,20 @@ namespace TerrariaAILink
 				case "clear":
 					_actions.Enqueue(ClearHostiles);
 					break;
+				case "swap":
+				{
+					int a = Int(root, "a", -1), b = Int(root, "b", -1);
+					_actions.Enqueue(() =>
+					{
+						var p = Main.LocalPlayer;
+						if (p == null || a < 0 || b < 0) return;
+						if (a >= p.inventory.Length || b >= p.inventory.Length) return;
+						var tmp = p.inventory[a];
+						p.inventory[a] = p.inventory[b];
+						p.inventory[b] = tmp;
+					});
+					break;
+				}
 				case "world":
 					_actions.Enqueue(() => { _worldName = Main.worldName ?? ""; });
 					break;

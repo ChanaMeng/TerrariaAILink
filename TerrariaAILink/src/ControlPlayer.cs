@@ -29,6 +29,11 @@ namespace TerrariaAILink
 			if (Player.whoAmI != Main.myPlayer) return;
 			if (Main.gameMenu || Main.drawingPlayerChat || Main.editSign || Main.editChest) return;
 
+			// This client is driven by the bridge, not by the keyboard: keep it
+			// "focused" so vanilla does not freeze local control while the user
+			// plays in the other window.
+			Main.hasFocus = true;
+
 			var srv = BridgeSystem.Server;
 			if (srv == null) return;
 			var f = srv.NextFrame();

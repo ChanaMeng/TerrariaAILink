@@ -13,7 +13,8 @@ export class World {
       this.lastTick = msg.tick ?? this.lastTick;
     } else if (msg.t === 'tiles') {
       const key = `${msg.x},${msg.y},${msg.w},${msg.h}`;
-      this.tiles.set(key, { x: msg.x, y: msg.y, w: msg.w, h: msg.h, data: Buffer.from(msg.d, 'base64') });
+      this.seq = (this.seq || 0) + 1;
+      this.tiles.set(key, { x: msg.x, y: msg.y, w: msg.w, h: msg.h, s: this.seq, data: Buffer.from(msg.d, 'base64') });
     }
   }
 
@@ -69,14 +70,17 @@ export class World {
   }
 
   tileAt(tx, ty) {
+    let best = null;
     for (const t of this.tiles.values()) {
       if (tx < t.x || ty < t.y || tx >= t.x + t.w || ty >= t.y + t.h) continue;
-      const i = ((ty - t.y) * t.w + (tx - t.x)) * 5;
-      const type = t.data[i] | (t.data[i + 1] << 8);
-      const flags = t.data[i + 2];
-      return { type, solid: !!(flags & 1), platform: !!(flags & 2), liquid: t.data[i + 3], liquidType: t.data[i + 4] };
+      if (!best || (t.s ?? 0) > (best.s ?? 0)) best = t;
     }
-    return null;
+    if (!best) return null;
+    const t = best;
+    const i = ((ty - t.y) * t.w + (tx - t.x)) * 5;
+    const type = t.data[i] | (t.data[i + 1] << 8);
+    const flags = t.data[i + 2];
+    return { type, solid: !!(flags & 1), platform: !!(flags & 2), liquid: t.data[i + 3], liquidType: t.data[i + 4] };
   }
 }
 

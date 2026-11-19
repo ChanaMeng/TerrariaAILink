@@ -92,9 +92,21 @@ try {
         dy: Number(rest[2] ?? -40),
       }));
       break;
+    case 'swap':
+      out(await post('/cmd', { op: 'swap', a: Number(rest[0]), b: Number(rest[1]) }));
+      break;
     case 'clear':
       out(await post('/cmd', { op: 'clear' }));
       break;
+    case 'grid': {
+      const [x, y, w = 60, h = 40] = rest.map(Number);
+      await post('/cmd', { op: 'tiles', x: x - 2, y: y - 2, w: w + 4, h: h + 4 });
+      await new Promise((r) => setTimeout(r, 250));
+      const g = await get(`/grid?x=${x}&y=${y}&w=${w}&h=${h}`);
+      console.log(`tiles ${x},${y} ${w}x${h}`);
+      g.rows.forEach((row, j) => console.log(String(y + j).padStart(4) + ' ' + row));
+      break;
+    }
     case 'tiles': {
       const [x, y, w, h] = rest.map(Number);
       out(await post('/cmd', { op: 'tiles', x, y, w: w || 64, h: h || 48 }));

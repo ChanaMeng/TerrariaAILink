@@ -22,6 +22,14 @@ namespace TerrariaAILink
 			Server = null;
 		}
 
+		public override void PreUpdatePlayers()
+		{
+			// Run before the vanilla update decides whether the local player is
+			// allowed to act: this client is bridge-driven and must not depend on
+			// the window actually owning keyboard focus.
+			if (!Main.gameMenu) Main.hasFocus = true;
+		}
+
 		public override void PostUpdateEverything()
 		{
 			var s = Server;
@@ -40,6 +48,7 @@ namespace TerrariaAILink
 			var p = Main.LocalPlayer;
 			if (p == null || !p.active) return;
 
+			Main.hasFocus = true;
 			s.PushState(StateCapture.Capture(p, s));
 			ChatTap.Tick(s);
 		}

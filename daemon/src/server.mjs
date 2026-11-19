@@ -25,6 +25,26 @@ export function createApi(ctx) {
         const lines = ctx.chatLog.filter((l) => l.seq > since);
         return ok(res, { lines, lastSeq: ctx.chatSeq || 0 });
       }
+      if (req.method === 'GET' && url.pathname === '/grid') {
+        const x = Number(url.searchParams.get('x'));
+        const y = Number(url.searchParams.get('y'));
+        const w = Math.min(Number(url.searchParams.get('w') ?? 60), 120);
+        const h = Math.min(Number(url.searchParams.get('h') ?? 40), 80);
+        const rows = [];
+        for (let j = 0; j < h; j++) {
+          let row = '';
+          for (let i = 0; i < w; i++) {
+            const t = world.tileAt(x + i, y + j);
+            if (!t) row += '?';
+            else if (t.solid) row += '#';
+            else if (t.platform) row += '=';
+            else if (t.liquid > 0) row += '~';
+            else row += '.';
+          }
+          rows.push(row);
+        }
+        return ok(res, { x, y, w, h, rows });
+      }
       if (req.method === 'GET' && url.pathname === '/state') {
         return ok(res, world.state ?? {});
       }
@@ -74,6 +94,15 @@ export function createApi(ctx) {
     }
     if (op === 'replay') {
       manager.set('replay', { frames: body.frames ?? [], loop: !!body.loop });
+      return { ok: true };
+    }
+    if (op === 'swap') {
+      client.send({ t: 'cmd', op: 'swap', a: body.a, b: body.b });
+      ctx.event('swap', { a: body.a, b: body.b });
+      return { ok: true };
+    }
+    if (op === 'clear') {
+      client.send({ t: 'cmd', op: 'clear' });
       return { ok: true };
     }
     return { ok: true, forwarded: op };
