@@ -10,6 +10,12 @@ A tModLoader mod and reference client that let **any external program drive a Te
 
 > Status: **experimental**. Tested against tModLoader `1.4.4.9` (2026.09 stable). Not compatible with vanilla Terraria `1.4.5`; tModLoader worlds and saves are separate.
 
+## Version support
+
+- **tModLoader 1.4.4.9 (2026.09 stable)** -- supported and tested.
+- **Terraria 1.4.5.x** -- not yet. tModLoader's 1.4.5 port is still in development and has no stable release or ETA (as of November 2026). When tModLoader 1.4.5 stable ships, this mod can be rebuilt against it: the C# layer needs the upstream API migration, while the protocol, daemon, behavior trees, and dodge code stay unchanged.
+- **Vanilla Terraria** -- never. This is a tModLoader mod, not a memory/overlay cheat.
+
 ## How it works
 
 ```
