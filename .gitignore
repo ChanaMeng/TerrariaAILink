@@ -9,6 +9,9 @@ local.props
 # runtime logs
 *.log
 
+# daemon runtime state (policy.json / decision.json file bridge)
+daemon/state/
+
 # reference clones / scratch
 ref/
 
