@@ -1,5 +1,7 @@
 # TerrariaAILink
 
+[github.com/ChanaMeng/TerrariaAILink](https://github.com/ChanaMeng/TerrariaAILink)
+
 A tModLoader mod and reference client that let **any external program drive a Terraria character with normal inputs at 60 Hz** -- for AI players, bots, automated testing, or replays.
 
 - **Mod** (`TerrariaAILink/`): reads player / NPC / projectile / item / tile state, writes `Player.control*` flags and mouse aim, records and replays input frames. No teleporting, no velocity hacks: it presses the same buttons a human would.
@@ -27,6 +29,9 @@ The mod is deliberately dumb: one state line per tick, one input line per tick. 
 Requirements: tModLoader 1.4.4.9, .NET 8 SDK.
 
 ```powershell
+git clone https://github.com/ChanaMeng/TerrariaAILink.git
+cd TerrariaAILink
+
 copy local.props.example local.props
 # edit local.props -> TmlTargetsPath points at ...\tModLoader\tMLMod.targets
 # or: set TML_DIR=C:\path\to\tModLoader
