@@ -68,6 +68,7 @@ export function createDodge() {
   let holdDir = null;
 
   return {
+    apply(world, frame, opts = {}) {
       const p = world.p;
       if (!p || p.dead) return frame;
       const threats = world.threats(opts.radius ?? 560);
@@ -78,6 +79,7 @@ export function createDodge() {
       const horizon = opts.horizon ?? 36;
 
       const scoreOf = (c) => simulate(p, c, threats, horizon);
+      const riskNow = scoreOf(current);
 
 
       let best = null;

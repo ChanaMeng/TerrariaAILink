@@ -9,6 +9,7 @@ const client = new ModClient();
 const dodge = createDodge();
 
 const events = [];
+const chatLog = [];
 let seq = 0;
 
 const ctx = {
@@ -17,6 +18,7 @@ const ctx = {
   dodge,
   manager: null,
   events,
+  chatLog,
   seq: 0,
   event(type, data = {}) {
     const e = { seq: ++seq, at: Date.now(), type, data };
@@ -45,6 +47,7 @@ const ctx = {
       hostiles: world.hostiles().length,
       threats: world.threats().length,
       events: events.slice(-15),
+      chat: chatLog.slice(-10),
       lastSeq: seq,
     };
   },
@@ -74,6 +77,14 @@ client.on('replay_done', () => {
 });
 
 client.on('log', (msg) => console.log(`[mod] ${msg.msg}`));
+client.on('chat', (msg) => {
+  const text = String(msg.text ?? '');
+  if (!text) return;
+  ctx.chatSeq = (ctx.chatSeq || 0) + 1;
+  chatLog.push({ seq: ctx.chatSeq, at: Date.now(), text });
+  if (chatLog.length > 300) chatLog.shift();
+  ctx.event('chat', { seq: ctx.chatSeq, text });
+});
 client.on('spawned', (msg) => ctx.event('spawned', msg));
 client.on('hello', (msg) => {
   ctx.log(`mod hello: ${msg.mod} v${msg.v} world=${msg.world || ''}`);

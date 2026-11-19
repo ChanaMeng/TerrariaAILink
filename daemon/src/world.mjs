@@ -1,3 +1,4 @@
+export class World {
   constructor() {
     this.state = null;
     this.at = 0;

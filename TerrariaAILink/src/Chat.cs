@@ -1,11 +1,12 @@
+using System;
 using Terraria;
+using Terraria.Chat;
 using Terraria.ID;
-using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace TerrariaAILink
 {
-	/// <summary>Print a line in the in-game chat, as if the local player said it.</summary>
+	/// <summary>Sends a chat line as the local player, through the same path the chat box uses.</summary>
 	public static class Chat
 	{
 		public static void PlayerSays(string text)
@@ -14,21 +15,22 @@ namespace TerrariaAILink
 			text = text.Replace("\r", " ").Replace("\n", " ").Trim();
 			if (text.Length > 400) text = text.Substring(0, 400);
 
-			var p = Main.LocalPlayer;
-			string name = p != null && p.active ? p.name : "Player";
-
 			if (Main.netMode == NetmodeID.SinglePlayer)
 			{
+				var p = Main.LocalPlayer;
+				string name = p != null && p.active ? p.name : "Player";
 				Main.NewText(name + ": " + text, (byte)255, (byte)255, (byte)255);
 				return;
 			}
 
-			Main.NewText(name + ": " + text, (byte)255, (byte)255, (byte)255);
 			try
 			{
-				NetMessage.SendData(MessageID.ChatText, -1, -1, NetworkText.FromLiteral(text), Main.myPlayer);
+				ChatHelper.SendChatMessageFromClient(new ChatMessage(text));
 			}
-			catch { }
+			catch (Exception e)
+			{
+				BridgeServer.Log("say failed: " + e.Message);
+			}
 		}
 	}
 

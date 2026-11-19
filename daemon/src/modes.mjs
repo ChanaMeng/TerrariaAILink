@@ -1,4 +1,5 @@
 import { sequence, selector, condition, action, SUCCESS, FAILURE } from './bt.mjs';
+import { neutral } from './proto.mjs';
 
 const PX = 16;
 
@@ -28,6 +29,7 @@ export class IdleMode extends Mode {
   tick() { return neutral(); }
 }
 
+export class ReleaseMode extends Mode {
   constructor(ctx, params) { super(ctx, params); this.name = 'release'; this.release = true; }
   enter() {
     this.ctx.client.send({ t: 'cmd', op: 'stop' });
@@ -108,6 +110,7 @@ export class CombatMode extends Mode {
       action(() => SUCCESS),
     );
 
+    this.tree = selector(
       action(() => this.selectTarget()),
       action(() => this.moveTree.tick(this.ctx)),
       action(() => this.aimAt()),
@@ -227,6 +230,7 @@ export class BuildMode extends Mode {
     const p = w.p;
     const f = neutral();
     const step = this.currentStep();
+    const now = Date.now();
     if (!step) {
       this.ctx.event('build_done', { placed: this.plan.length });
       this.ctx.manager.set('idle');

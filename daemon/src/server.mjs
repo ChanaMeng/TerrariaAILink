@@ -20,6 +20,11 @@ export function createApi(ctx) {
         const y = Number(url.searchParams.get('y'));
         return ok(res, world.tileAt(x, y) ?? null);
       }
+      if (req.method === 'GET' && url.pathname === '/chat') {
+        const since = Number(url.searchParams.get('since') ?? 0);
+        const lines = ctx.chatLog.filter((l) => l.seq > since);
+        return ok(res, { lines, lastSeq: ctx.chatSeq || 0 });
+      }
       if (req.method === 'GET' && url.pathname === '/state') {
         return ok(res, world.state ?? {});
       }

@@ -27,6 +27,7 @@ namespace TerrariaAILink
 			var s = Server;
 			if (s == null) return;
 
+			s.Pump();
 
 			if (!s.Connected) return;
 
@@ -40,10 +41,12 @@ namespace TerrariaAILink
 			if (p == null || !p.active) return;
 
 			s.PushState(StateCapture.Capture(p, s));
+			ChatTap.Tick(s);
 		}
 
 		public override void OnWorldUnload()
 		{
+			ChatTap.Reset();
 			Server?.ResetWorld();
 		}
 	}

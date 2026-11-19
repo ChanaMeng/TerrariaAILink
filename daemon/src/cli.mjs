@@ -61,6 +61,9 @@ try {
     case 'say':
       out(await post('/cmd', { op: 'say', text: rest.join(' ') }));
       break;
+    case 'chat':
+      out(await get('/chat?since=' + (rest[0] ?? 0)));
+      break;
     case 'stop':
       out(await post('/mode', { name: 'release', params: {} }));
       break;
