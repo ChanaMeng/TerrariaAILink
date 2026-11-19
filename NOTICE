@@ -1,0 +1,10 @@
+WhaleLink
+=========
+
+This project is inspired by TerraBlind (https://github.com/Reisenbug/TerraBlind),
+an MIT-licensed tModLoader mod that lets an LLM agent play Terraria.
+
+No TerraBlind source code is included in this repository. The input-injection
+approach (writing Player.control* flags in ModPlayer.SetControls) and the general
+"LLM plans / code reflexes / mod executes" split are ideas borrowed from it and
+from the tModLoader modding community.

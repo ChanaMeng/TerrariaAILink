@@ -1,0 +1,12 @@
+﻿{
+  "name": "terrariaailink-daemon",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Reference 60 Hz client for TerrariaAILink",
+  "scripts": {
+    "start": "node src/main.mjs",
+    "mock": "node tools/mockmod.mjs"
+  }
+}
+

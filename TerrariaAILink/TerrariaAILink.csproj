@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TmlTargetsPath comes from Directory.Build.props (local.props or TML_DIR). -->
+  <Import Project="$(TmlTargetsPath)" Condition="'$(TmlTargetsPath)' != ''" />
+
+  <PropertyGroup>
+    <AssemblyName>TerrariaAILink</AssemblyName>
+    <RootNamespace>TerrariaAILink</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <Target Name="CheckTmlTargets" BeforeTargets="PrepareForBuild" Condition="'$(TmlTargetsPath)' == ''">
+    <Error Text="tMLMod.targets not found. Copy local.props.example to local.props and set TmlTargetsPath, or set TML_DIR." />
+  </Target>
+
+</Project>

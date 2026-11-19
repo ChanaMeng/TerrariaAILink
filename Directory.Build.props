@@ -1,0 +1,10 @@
+<Project>
+  <!-- Machine-local settings come first: copy local.props.example to local.props. -->
+  <Import Project="$(MSBuildThisFileDirectory)local.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)local.props')" />
+
+  <!-- Alternatively, set the TML_DIR environment variable to the tModLoader install folder. -->
+  <PropertyGroup Condition="'$(TmlTargetsPath)' == '' and '$(TML_DIR)' != ''">
+    <TmlTargetsPath>$(TML_DIR)\tMLMod.targets</TmlTargetsPath>
+  </PropertyGroup>
+</Project>

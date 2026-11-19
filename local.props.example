@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Default Steam library on Windows; change to your tModLoader install folder. -->
+    <TmlTargetsPath>C:\Program Files (x86)\Steam\steamapps\common\tModLoader\tMLMod.targets</TmlTargetsPath>
+  </PropertyGroup>
+</Project>

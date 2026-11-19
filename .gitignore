@@ -1,0 +1,19 @@
+# build output
+bin/
+obj/
+*.tmod
+
+# local machine config (tModLoader path); copy local.props.example and edit
+local.props
+
+# runtime logs
+*.log
+
+# reference clones / scratch
+ref/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vs/
+.idea/

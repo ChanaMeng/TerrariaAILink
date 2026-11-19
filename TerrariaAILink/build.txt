@@ -1,0 +1,5 @@
+displayName = TerrariaAILink
+author = TerrariaAILink contributors
+version = 0.1.0
+side = Client
+homepage = https://github.com/ChanaMeng/TerrariaAILink
