@@ -6,6 +6,7 @@
 //   whale build plan.json
 //   whale stop
 import fs from 'node:fs';
+import { buildBrief } from './brief.mjs';
 
 const API = process.env.TAILINK_API || 'http://127.0.0.1:17891';
 const [cmd, ...rest] = process.argv.slice(2);
@@ -65,20 +66,26 @@ try {
       out(await get('/chat?since=' + (rest[0] ?? 0)));
       break;
     case 'brief': {
-      const st = await get('/status');
-      const chat = await get('/chat?since=0');
-      const ev = await get('/events?since=0');
-      out({
-        link: st.link,
-        mode: st.mode?.name ?? null,
-        player: st.player,
-        hostiles: st.hostiles,
-        boss: st.boss,
-        chat: (chat.lines ?? []).slice(-5).map((l) => l.text),
-        events: (ev.events ?? []).slice(-6).map((e) => e.type),
-        lastSeq: st.lastSeq,
-        chatSeq: chat.lastSeq,
+      const asJson = rest.includes('--json');
+      const offline = () => buildBrief({
+        client: { connected: false }, world: null, manager: null, events: [], chatLog: [],
       });
+      let res;
+      try {
+        res = await get('/brief');
+      } catch {
+        // daemon 没在跑：给一屏「未连接」，不抛栈
+        const b = offline();
+        if (asJson) out(b.data); else console.log(b.text);
+        break;
+      }
+      if (!res || typeof res.text !== 'string' || !res.data) {
+        // 旧版 daemon 没有 /brief，按未连接处理
+        const b = offline();
+        if (asJson) out(b.data); else console.log(b.text);
+        break;
+      }
+      if (asJson) out(res.data); else console.log(res.text);
       break;
     }
     case 'stop':
@@ -113,7 +120,7 @@ try {
       break;
     }
     default:
-      console.log('tailink <status|mode|mv|goto|attack|boss|build|say|stop|tiles|events|state>');
+      console.log('tailink <status|brief|mode|mv|goto|attack|boss|build|say|stop|tiles|events|state>');
   }
 } catch (e) {
   console.error('error:', e.message);

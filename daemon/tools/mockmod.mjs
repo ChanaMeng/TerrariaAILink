@@ -1,3 +1,4 @@
+import net from 'node:net';
 
 const PORT = 17890;
 const GROUND = 600;
@@ -33,9 +34,9 @@ setInterval(() => {
   p.y += p.vy;
   if (p.y >= GROUND) { p.y = GROUND; p.vy = 0; p.grd = 1; } else p.grd = 0;
 
-  s.vx = Math.abs(s.x - p.x) > 24 ? Math.sign(p.x - s.x) * 0.6 : 0;
-  s.x += s.vx;
-  s.y = GROUND;
+  npcs[0].vx = Math.abs(npcs[0].x - p.x) > 24 ? Math.sign(p.x - npcs[0].x) * 0.6 : 0;
+  npcs[0].x += npcs[0].vx;
+  npcs[0].y = GROUND;
 
   if (tick % 150 === 0) projs.push({ i: projs.length + 1, ty: 1, x: p.x + 260, y: p.y - 30, vx: -4, vy: 0, w: 10, h: 10, dm: 10, ho: 1, ow: 255, eu: 0, ai: 0 });
   for (const pr of projs) { pr.x += pr.vx; pr.y += pr.vy; }

@@ -27,6 +27,7 @@
 - 仓库 `ChanaMeng/TerrariaAILink`，MIT + NOTICE，去个人痕迹。
 - 文档四件套：`design.md` / `dev.md` / `progress.md` / `test.md`（2026-11-20 建立）。
 - 参考项目调研：TerraBlind、terrar.ai、TerraPlayerBot、`Yukiena1145/terraria-ai-pet`（Coopanion 桌宠世界插件）。
+- M2 战况摘要 `brief` 2.0：`buildBrief` 一屏战况 + `GET /brief` + `brief --json`；`node --test` 与 mock 联调通过（2026-11-20）。
 
 ## 进行中
 

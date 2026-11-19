@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { API_PORT } from './proto.mjs';
+import { buildBrief } from './brief.mjs';
 
 export function createApi(ctx) {
   const { world, client, manager } = ctx;
@@ -10,6 +11,9 @@ export function createApi(ctx) {
     try {
       if (req.method === 'GET' && url.pathname === '/status') {
         return ok(res, ctx.snapshot());
+      }
+      if (req.method === 'GET' && url.pathname === '/brief') {
+        return ok(res, buildBrief(ctx));
       }
       if (req.method === 'GET' && url.pathname === '/events') {
         const since = Number(url.searchParams.get('since') ?? 0);
