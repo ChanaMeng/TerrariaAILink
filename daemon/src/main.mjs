@@ -78,7 +78,9 @@ client.on('replay_done', () => {
 
 client.on('log', (msg) => console.log(`[mod] ${msg.msg}`));
 client.on('chat', (msg) => {
-  const text = String(msg.text ?? '');
+  // the game sends chat with inline tags; [n:Name] is a player name
+  const raw = String(msg.text ?? '');
+  const text = raw.replace(/\[n:([^\]]+)\]/g, '<$1>').replace(/\s+/g, ' ').trim();
   if (!text) return;
   ctx.chatSeq = (ctx.chatSeq || 0) + 1;
   chatLog.push({ seq: ctx.chatSeq, at: Date.now(), text });
