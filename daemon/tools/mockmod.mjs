@@ -88,6 +88,11 @@ const server = net.createServer((sock) => {
       }
     }
   });
+  sock.on('error', (e) => {
+    // daemon 崩了/被强杀时是 ECONNRESET；mock 只是开发工具，别跟着一起死。
+    if (e.code !== 'ECONNRESET') console.log('[mock] socket error:', e.code);
+    input = null;
+  });
   sock.on('close', () => { console.log('[mock] client gone'); input = null; });
 });
 

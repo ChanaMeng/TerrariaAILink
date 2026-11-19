@@ -111,7 +111,9 @@ export class CombatMode extends Mode {
       action(() => SUCCESS),
     );
 
-    this.tree = selector(
+    // 注意这里是 sequence 不是 selector：战斗是「选目标 → 走位 → 瞄准 → 出手」
+    // 四步依次执行，selector 遇到第一个 SUCCESS 就会短路（选完目标就结束，永远不打）。
+    this.tree = sequence(
       action(() => this.selectTarget()),
       action(() => this.moveTree.tick(this.ctx)),
       action(() => this.aimAt()),
@@ -181,6 +183,9 @@ export class CombatMode extends Mode {
 
   tick() {
     this.frame = neutral();
+    // 没有目标时先选；选不到就本帧停手（selectTarget 已经发 no_target 并切 idle）。
+    // 不在树里硬跑：selector 遇到 FAILURE 会继续走 moveTree，而那时 target 是 null。
+    if (!this.target && !this.selectTarget()) return this.frame;
     this.tree.tick({ now: Date.now(), world: this.ctx.world });
     return this.frame;
   }

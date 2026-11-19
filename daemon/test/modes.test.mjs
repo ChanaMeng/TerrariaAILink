@@ -233,3 +233,26 @@ test('status exposes lastGroup and guard cooldowns', () => {
   assert.equal(typeof status.guards.low_hp, 'number');
   assert.equal(typeof status.guards.boss_seen, 'number');
 });
+
+test('combat walks, aims and uses — 四步是顺序执行，不是 selector 短路', () => {
+  // 25 格外的目标（超出 range=18）：应当朝它走（右）
+  const far = makeHarness({ n: [slime({ x: 1000 + 25 * 16 })] });
+  far.manager.set('combat', { range: 18 });
+  const walk = far.manager.tick();
+  assert.equal(walk.right, true, 'combat 应该朝 10 格外的目标走过去');
+
+  // 2 格内：应当瞄准并出手
+  const near = makeHarness({ n: [slime({ x: 1000 + 2 * 16 })] });
+  near.manager.set('combat', { range: 18 });
+  const hit = near.manager.tick();
+  assert.equal(hit.use, true, '目标进入近战距离时应该 use');
+  assert.ok(Array.isArray(hit.aim), 'combat 应该给出瞄准方向');
+});
+
+test('combat without any target returns to idle instead of crashing', () => {
+  const h = makeHarness({ n: [] });
+  h.manager.set('combat', { target: 9999, scan: 1 });
+  assert.doesNotThrow(() => h.manager.tick());
+  assert.equal(h.manager.name, 'idle');
+  assert.ok(h.events.some((e) => e.type === 'no_target'));
+});
