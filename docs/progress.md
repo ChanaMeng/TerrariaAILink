@@ -54,13 +54,14 @@
 
 ## 待办（按优先级）
 
-1. **build 走位接寻路** —— 现在够不着时还是直线走
-2. **工具自动选** —— 背包 item type → 斧/镐/方块/武器，别让鲸白拿镐砍树
-3. **home** —— 补墙、安门、摆家具；依赖合成（C# `craft`）
-4. **boss 阶段表** —— 克苏鲁之眼优先，带撤退线
-5. **follow** —— 等 mod 推 `otherPlayers`（主人说最后做）
-6. **合成 / 门** —— 工作台 + 木材，C# 侧 `craft` 命令
-7. **原子动作** —— 找物品、搬格子、放墙、房屋检查（对照 `terraria-ai-pet`）
+1. **接错窗口的第二层防护** —— 第一层已上（`start-whale.ps1` 启动前查主档 `enabled.json`，`-DryRun` 只检查）。第二层要改 C#：`hello` 带 `player` / `savePath` / `pid`，daemon 用 `TAILINK_EXPECT_PLAYER` 校验，不匹配就发 `link_rejected` 并保持 `release`、不发帧。
+2. **build 走位接寻路** —— 现在够不着时还是直线走
+3. **工具自动选** —— 背包 item type → 斧/镐/方块/武器，别让鲸白拿镐砍树
+4. **home** —— 补墙、安门、摆家具；依赖合成（C# `craft`）
+5. **boss 阶段表** —— 克苏鲁之眼优先，带撤退线
+6. **follow** —— 等 mod 推 `otherPlayers`（主人说最后做）
+7. **合成 / 门** —— 工作台 + 木材，C# 侧 `craft` 命令
+8. **原子动作** —— 找物品、搬格子、放墙、房屋检查（对照 `terraria-ai-pet`）
 
 ## 已知限制（不是 bug，是还没做）
 
