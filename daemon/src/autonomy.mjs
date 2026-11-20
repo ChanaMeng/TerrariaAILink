@@ -58,6 +58,12 @@ const GATHER_HURT_PENALTY = 30;
 const GATHER_HOSTILE_PENALTY = 40;
 const GATHER_BOSS_PENALTY = 40;
 
+// fight：附近有敌对就上。挨打不还手是之前的真机问题——候选池里原本没有「打」。
+const FIGHT_BASE = 65;
+const FIGHT_NEAR_BONUS = 20;
+const FIGHT_BOSS_BONUS = 15;
+const FIGHT_TILES = 40;          // 40 格内的敌对就值得打
+
 const EXPLORE_BASE = 45;
 const EXPLORE_BOREDOM_MS = 180_000; // 3 分钟没探索 → 无聊度拉满
 const EXPLORE_RANGE_TILES = 120;    // 离 origin 120 格外 → 新鲜度归零
@@ -72,7 +78,7 @@ const HOLD_BOSS_BONUS = 6;
 const IDLE_SCORE = 1.5;
 
 /** 本模块允许自己选的组；survive 不在里面（守护层说了算）。 */
-export const AUTONOMY_GROUPS = ['gather', 'explore', 'hold', 'idle'];
+export const AUTONOMY_GROUPS = ['fight', 'gather', 'explore', 'hold', 'idle'];
 
 /** 这些 source 不是鲸白的手动指令：boot 是启动默认，decision_default 是超时兜底。 */
 const NON_MANUAL_SOURCES = new Set(['autonomy', 'boot', 'decision_default']);
@@ -81,7 +87,7 @@ const NON_MANUAL_SOURCES = new Set(['autonomy', 'boot', 'decision_default']);
 const END_EVENTS = new Set(['goal_done', 'stuck', 'no_target', 'danger', 'timeout']);
 const COOLDOWN_EVENTS = new Set(['goal_done', 'stuck', 'no_target', 'danger']);
 
-const CANDIDATE_ORDER = ['gather', 'explore', 'hold', 'idle'];
+const CANDIDATE_ORDER = ['fight', 'gather', 'explore', 'hold', 'idle'];
 
 // ── 小工具 ──────────────────────────────────────────────────────────────
 
@@ -377,6 +383,14 @@ export function createAutonomy(ctx = null, options = {}) {
     if (nearHostile) explore -= EXPLORE_HOSTILE_PENALTY;
     if (hasBoss) explore -= EXPLORE_BOSS_PENALTY;
 
+    // fight：40 格内有敌对、且血够就先打。贴脸加码；残血直接让位给守护。
+    let fight = 0;
+    const fightEnemies = hostiles(FIGHT_TILES);
+    if (fightEnemies.length > 0 && ratio >= HURT_HP) fight = FIGHT_BASE;
+    if (nearHostile) fight += FIGHT_NEAR_BONUS;
+    if (hasBoss) fight += FIGHT_BOSS_BONUS;
+    if (ratio < CRITICAL_HP) fight = -Infinity;
+
     // hold：永远低分；附近有怪才涨一点，没别的事干时才轮得到它。
     let hold = HOLD_BASE;
     if (nearTiles != null && nearTiles <= HOLD_ENGAGE_TILES) {
@@ -386,6 +400,7 @@ export function createAutonomy(ctx = null, options = {}) {
     if (hasBoss) hold += HOLD_BOSS_BONUS;
 
     const scores = {
+      fight: penalize('fight', fight, now),
       gather: penalize('gather', gather, now),
       explore: penalize('explore', explore, now),
       hold: penalize('hold', hold, now),
@@ -394,11 +409,15 @@ export function createAutonomy(ctx = null, options = {}) {
 
     return {
       scores,
-      detail: { ratio, used, emptyRatio, nearTiles, night, hasBoss, boredom, frontier, distTiles },
+      detail: { ratio, used, emptyRatio, nearTiles, night, hasBoss, boredom, frontier, distTiles, enemies: fightEnemies.length },
     };
   }
 
   function reasonFor(group, detail) {
+    if (group === 'fight') {
+      if (detail.enemies > 0) return 'hostiles_near';
+      return 'fallback';
+    }
     if (group === 'gather') return detail.emptyRatio >= 0.8 ? 'inventory_empty' : 'inventory_space';
     if (group === 'explore') return detail.boredom >= 0.6 ? 'bored' : 'frontier';
     if (group === 'hold') {

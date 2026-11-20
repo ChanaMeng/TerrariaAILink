@@ -251,7 +251,7 @@ test('combat walks, aims and uses — 四步是顺序执行，不是 selector �
 
 test('combat without any target returns to idle instead of crashing', () => {
   const h = makeHarness({ n: [] });
-  h.manager.set('combat', { target: 9999, scan: 1 });
+  h.manager.set('combat', { target: 9999, scan: 1, graceMs: 0 });
   assert.doesNotThrow(() => h.manager.tick());
   assert.equal(h.manager.name, 'idle');
   assert.ok(h.events.some((e) => e.type === 'no_target'));

@@ -6,6 +6,7 @@ import { createApi } from './server.mjs';
 import {
   applyPolicy, knownGroups, readPolicy, requestDecision, watchPolicy,
 } from './policy.mjs';
+import { createAutonomy } from './autonomy.mjs';
 
 const world = new World();
 const client = new ModClient();
@@ -34,6 +35,7 @@ const ctx = {
   decision: null,    // 当前 decision 请求（内存；snapshot 不读文件）
   followTarget: null, // 协议还没有其他玩家坐标；follow 组靠这个接口
   briefFn: null,     // 动态 import ./brief.mjs 的 buildBrief；拿不到就是 null
+  autonomy: null,    // 自主循环（没有鲸白指令时自己选组）
   event(type, data = {}) {
     const e = { seq: ++seq, at: Date.now(), type, data };
     events.push(e);
@@ -77,6 +79,7 @@ const ctx = {
         summary: ctx.decision.summary,
         expiresInMs: Math.max(0, (ctx.decision.expiresAt ?? 0) - Date.now()),
       } : null,
+      autonomy: ctx.autonomy ? ctx.autonomy.status() : null,
       events: events.slice(-15),
       chat: chatLog.slice(-10),
       lastSeq: seq,
@@ -168,6 +171,10 @@ function scheduleDecision(type, data) {
 manager = new ModeManager(ctx);
 ctx.manager = manager;
 
+// 自主循环：没有鲸白指令时自己选组（纯代码，零 token）。
+const autonomy = createAutonomy(ctx);
+ctx.autonomy = autonomy;
+
 // brief.mjs 由另一个会话维护：能拿到就用，拿不到就 null。
 try {
   const briefMod = await import('./brief.mjs');
@@ -178,7 +185,11 @@ try {
 
 client.on('state', (msg) => {
   world.onMessage(msg);
-  manager.tick();
+  const frame = manager.tick();
+  // 诊断开关：TAILINK_DEBUG_FRAME=1 时把每帧输入打出来（默认关，不刷日志）。
+  if (process.env.TAILINK_DEBUG_FRAME && frame) {
+    console.log(`[frame] ${JSON.stringify(frame)}`);
+  }
 });
 
 client.on('tiles', (msg) => world.onMessage(msg));
@@ -222,6 +233,13 @@ if (!manager.current) manager.set('idle');
 // 鲸白写 policy.json → 200ms 内热加载。
 // 同组同参数不重复 set，避免启动时把刚 boot 的组又重置一次。
 watchPolicy((policy) => {
+  // 鲸白写 {"group":"auto"}：把方向盘交还给自主循环。
+  // 注意 normalizePolicy 会把 auto 当未知组并带 error，所以这里不看 error。
+  if (policy && policy.group === 'auto') {
+    ctx.policy = { group: 'auto', params: {}, reason: policy.reason ?? '', source: 'manual', at: Date.now() };
+    ctx.event('autonomy_resume', { reason: policy.reason ?? '' });
+    return;
+  }
   if (!policy.error && manager.name === policy.group && ctx.policy && ctx.policy.group === policy.group
     && JSON.stringify(ctx.policy.params ?? {}) === JSON.stringify(policy.params ?? {})) {
     return;
@@ -234,4 +252,5 @@ watchPolicy((policy) => {
 
 client.start();
 createApi(ctx);
+autonomy.start();
 ctx.log('daemon up: mod=127.0.0.1:17890 api=127.0.0.1:17891');

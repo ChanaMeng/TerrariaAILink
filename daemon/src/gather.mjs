@@ -146,7 +146,11 @@ class GatherMode {
     const cy = Math.floor(pty);
     let best = null;
     let bestD = Infinity;
-    for (let dy = -SCAN_TILES; dy <= SCAN_TILES; dy++) {
+    // 够不着的高度不要：树只找同一层附近（头顶 3 格到脚下 6 格），
+    // 真机上会选到头顶 19 格的树、跳不上去白卡 8 秒。
+    const upLimit = this.kind === 'ore' ? 6 : 3;
+    const downLimit = this.kind === 'ore' ? 20 : 6;
+    for (let dy = -upLimit; dy <= downLimit; dy++) {
       for (let dx = -SCAN_TILES; dx <= SCAN_TILES; dx++) {
         const tx = cx + dx;
         const ty = cy + dy;

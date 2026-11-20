@@ -27,6 +27,12 @@ export function createApi(ctx) {
       }
       if (req.method === 'POST' && url.pathname === '/policy') {
         const body = await readBody(req);
+        // {"group":"auto"} 不是真实组，是「交还给自主循环」的暗号。
+        if (body && body.group === 'auto') {
+          ctx.policy = { group: 'auto', params: {}, reason: body.reason ?? '', source: 'manual', at: Date.now() };
+          ctx.event('autonomy_resume', { reason: body.reason ?? '' });
+          return ok(res, { ok: true, policy: ctx.policy });
+        }
         const written = writePolicy(body);
         const applied = applyPolicy(ctx, written, 'http');
         return ok(res, { ok: applied, policy: written });
@@ -108,7 +114,8 @@ export function createApi(ctx) {
     }
     if (op === 'stop') {
       client.send({ t: 'cmd', op: 'stop' });
-      manager.set('idle');
+      // 松手必须用 release：idle 每帧仍发「全松开」的帧，会继续盖住主人的键盘。
+      manager.set('release');
       ctx.event('stop', {});
       return { ok: true };
     }
@@ -132,6 +139,13 @@ export function createApi(ctx) {
     }
     if (op === 'clear') {
       client.send({ t: 'cmd', op: 'clear' });
+      return { ok: true };
+    }
+    if (op === 'spawn') {
+      client.send({
+        t: 'cmd', op: 'spawn',
+        type: Number(body.type ?? 1), dx: Number(body.dx ?? 200), dy: Number(body.dy ?? -40),
+      });
       return { ok: true };
     }
     return { ok: true, forwarded: op };

@@ -1,5 +1,7 @@
 import { sequence, selector, condition, action, SUCCESS, FAILURE } from './bt.mjs';
 import { neutral } from './proto.mjs';
+import { createBuildMode } from './build.mjs';
+import { createGatherMode } from './gather.mjs';
 import { evaluateGuards, guardStatus } from './guard.mjs';
 
 const PX = 16;
@@ -101,9 +103,12 @@ export class CombatMode extends Mode {
     this.range = (this.params.range ?? 18) * PX;
     this.targetId = this.params.target ?? null;
     this.aimLead = this.params.lead !== false;
-    this.allowDodge = true;
+    // 近战贴脸时闪避层会把左右清零（站着躲），打怪反而打不出走位；要躲就显式开。
+    this.allowDodge = this.params.dodge !== false;
     this.target = null;
     this.frame = neutral();
+    this.enteredAt = Date.now();
+    this.wasEmpty = false;
 
     this.moveTree = selector(
       sequence(condition(() => this.distPx() > this.range), action(() => this.approach())),
@@ -133,10 +138,17 @@ export class CombatMode extends Mode {
   selectTarget() {
     this.target = this.pickTarget();
     if (!this.target) {
-      this.ctx.event('no_target', {});
-      this.ctx.manager.set('idle');
+      // 刚切进战斗组时，这一帧的状态可能还是切组之前的（或还没收到第一帧）。
+      // 给它一个宽限期，别当场放弃——真机上这就是「切了战斗却站着不动」。
+      if (Date.now() - this.enteredAt < (this.params.graceMs ?? 1200)) return FAILURE;
+      if (!this.wasEmpty) {
+        this.wasEmpty = true;
+        this.ctx.event('no_target', {});
+        this.ctx.manager.set('idle');
+      }
       return FAILURE;
     }
+    this.wasEmpty = false;
     return SUCCESS;
   }
 
@@ -159,6 +171,7 @@ export class CombatMode extends Mode {
   }
 
   aimAt() {
+    if (this.params.aim === false) return SUCCESS; // 调试/近战贴脸时可以不写鼠标
     const p = this.ctx.world.p;
     const dist = this.distPx();
     let lead = 0;
@@ -215,70 +228,96 @@ export class BossMode extends CombatMode {
   }
 }
 
-export class BuildMode extends Mode {
-  constructor(ctx, params) { super(ctx, params); this.name = 'build'; }
+/**
+ * 挖一格（门洞、矿脉、清障）。走正常输入：切镐 → 瞄准 → 按住左键 → 回读瓦片。
+ * 这是第一个「原子动作」型策略组：目标是一格，不是一段行为。
+ */
+export class MineMode extends Mode {
+  constructor(ctx, params) { super(ctx, params); this.name = 'mine'; }
+
   enter() {
-    this.plan = this.params.plan || [];
-    this.i = 0;
-    this.reach = (this.params.reach ?? 5) * PX;
-    this.useTicks = 0;
-    this.retries = 0;
-    this.hp = this.ctx.world.p?.hp ?? 100;
-    this.lastCheck = 0;
-    this.allowDodge = true;
-    this.ctx.client.send({ t: 'cmd', op: 'tiles', x: Math.floor((this.ctx.world.p?.x ?? 0) / PX) - 30, y: Math.floor((this.ctx.world.p?.y ?? 0) / PX) - 20, w: 64, h: 48 });
+    this.tx = Math.round(Number(this.params.x));
+    this.ty = Math.round(Number(this.params.y));
+    this.slot = this.params.slot ?? null;
+    this.reach = (this.params.reach ?? 4.5) * PX;
+    this.timeoutMs = this.params.timeoutMs ?? 20_000;
+    this.startedAt = Date.now();
+    this.allowDodge = this.params.dodge === true;
+    this.done = false;
+    this.tilesAt = 0;
+    this.lastX = null;
+    this.progressAt = Date.now();
+    this.requestTiles();
+    this.ctx.event('mine_start', { x: this.tx, y: this.ty, slot: this.slot });
   }
 
-  currentStep() { return this.plan[this.i] ?? null; }
+  requestTiles() {
+    const pad = 6;
+    this.ctx.client.send({
+      t: 'cmd', op: 'tiles',
+      x: this.tx - pad, y: this.ty - pad, w: pad * 2 + 1, h: pad * 2 + 1,
+    });
+    this.tilesAt = Date.now();
+  }
+
+  finish(type, extra = {}) {
+    if (this.done) return;
+    this.done = true;
+    this.ctx.event(type, { group: 'mine', x: this.tx, y: this.ty, ...extra });
+    this.ctx.manager.set('idle');
+  }
 
   tick() {
     const w = this.ctx.world;
     const p = w.p;
     const f = neutral();
-    const step = this.currentStep();
     const now = Date.now();
-    if (!step) {
-      this.ctx.event('build_done', { placed: this.plan.length });
-      this.ctx.manager.set('idle');
+    if (!p || this.done) return f;
+
+    if (now - this.startedAt > this.timeoutMs) {
+      this.finish('mine_fail', { reason: 'timeout' });
       return f;
     }
 
-    if (now - this.lastCheck > 1000) {
-      this.lastCheck = now;
-      if (p.hp < this.hp - 30 || p.hp < (p.mhp ?? p.hp) * 0.45) {
-        this.ctx.event('build_risk', { hp: p.hp, step: this.i });
-        this.ctx.manager.set('idle');
-        return f;
-      }
-      this.hp = Math.max(this.hp, p.hp);
+    // 瓦片是快照：自己挖掉的格子要重新拉一次才看得见。
+    if (now - this.tilesAt > 1200) this.requestTiles();
+
+    const t = w.tileAt(this.tx, this.ty);
+    // tileAt 返回 null = 这块瓦片数据还没回来，不等于「空气」。
+    // 之前第一帧就判 empty 直接退出，真机上等于什么也没挖。
+    if (!t) {
+      if (now - this.startedAt > 2500) this.finish('mine_fail', { reason: 'no_tiles' });
+      return f;
+    }
+    if (!t.solid) {
+      this.finish('mine_done', { reason: 'empty' });
+      return f;
     }
 
-    const tx = step.x * PX + 8;
-    const ty = step.y * PX + 8;
-    const dx = tx - p.x;
-    const dist = Math.hypot(dx, ty - p.y);
-
+    const tx = this.tx * PX + 8;
+    const ty = this.ty * PX + 8;
+    const dist = Math.hypot(tx - p.x, ty - p.y);
+    if (this.lastX == null) this.lastX = p.x;
+    if (Math.abs(p.x - this.lastX) >= 6) {
+      this.lastX = p.x;
+      this.progressAt = now;
+    }
     if (dist > this.reach) {
       walkToward(f, p, tx, ty, 6);
-      if (p.grd && Math.abs(p.vx) < 0.05) f.jump = true;
+      // 只有「真的被挡住一段时间」才跳，别一站着就蹦。
+      if (p.grd && Date.now() - this.progressAt > 700) f.jump = true;
       return f;
     }
 
     f.aim = [(tx - p.x) / PX, (ty - p.y) / PX];
     f.use = true;
-    if (step.slot != null) f.slot = step.slot;
-    else if (this.params.slot != null) f.slot = this.params.slot;
-    this.useTicks++;
-    if (this.useTicks >= (this.params.ticksPerTile ?? 6)) {
-      this.useTicks = 0;
-      this.i++;
-      this.retries = 0;
-      this.ctx.event('build_step', { index: this.i, total: this.plan.length });
-    }
+    if (this.slot != null) f.slot = this.slot;
     return f;
   }
 
-  status() { return { name: this.name, index: this.i, total: this.plan.length, step: this.currentStep() }; }
+  status() {
+    return { name: this.name, x: this.tx, y: this.ty, done: this.done };
+  }
 }
 
 export class ReplayMode extends Mode {
@@ -391,127 +430,23 @@ export class SurviveMode extends Mode {
   }
 }
 
-/** 攒资源：朝一个方向走，同时朝前方脚下挥工具。 */
-export class GatherMode extends Mode {
-  constructor(ctx, params) { super(ctx, params); this.name = 'gather'; }
-
-  enter() {
-    this.dir = this.params.dir === 'left' ? 'left' : 'right';
-    this.kind = this.params.kind === 'ore' ? 'ore' : 'tree';
-    this.timeoutMs = this.params.timeoutMs ?? 60_000;
-    this.startedAt = Date.now();
-    this.allowDodge = true;
-    const p = this.ctx.world.p;
-    this.lastX = p?.x ?? null;
-    this.progressAt = Date.now();
-    this.stuckReported = false;
-    this.finished = false;
-    this.invSig = null;
-    this.items0 = null;
-  }
-
-  inventorySignature() {
-    const inv = this.ctx.world.state?.in;
-    return Array.isArray(inv) ? inv.join(',') : null;
-  }
-
-  usedSlots() {
-    const inv = this.ctx.world.state?.in;
-    return Array.isArray(inv) ? inv.filter((t) => Number(t) > 0).length : null;
-  }
-
-  finish(reason, extra = {}) {
-    if (this.finished) return;
-    this.finished = true;
-    this.ctx.event('goal_done', {
-      group: 'gather', reason, kind: this.kind, dir: this.dir, ...extra,
-    });
-    this.ctx.manager.set('idle');
-  }
-
-  tick() {
-    const w = this.ctx.world;
-    const p = w.p;
-    const now = Date.now();
-    const f = neutral();
-    if (!p || this.finished) return f;
-
-    if (now - this.startedAt >= this.timeoutMs) {
-      this.finish('timeout', { ms: now - this.startedAt });
-      return f;
-    }
-
-    const hostile = w.nearestHostile(this.params.dangerTiles ?? 5);
-    const boss = w.boss();
-    const ratio = p.mhp > 0 ? p.hp / p.mhp : 1;
-    // 满血时路过小怪不算危险；挨过打（<90%）且敌人还在附近才撤。
-    const hurtNear = hostile && ratio < (this.params.dangerHpNear ?? 0.9);
-    if (ratio < (this.params.dangerHp ?? 0.45) || boss || hurtNear) {
-      this.finish('danger', hostile
-        ? { threat: hostile.i, hp: p.hp, boss: boss?.i ?? null }
-        : { hp: p.hp, boss: boss?.i ?? null });
-      return f;
-    }
-
-    const sig = this.inventorySignature();
-    if (sig != null) {
-      if (this.invSig == null) {
-        this.invSig = sig;
-        this.items0 = this.usedSlots();
-      } else if (sig !== this.invSig) {
-        this.finish('inventory', { used: this.usedSlots(), before: this.items0 });
-        return f;
-      }
-    }
-
-    if (this.lastX == null) this.lastX = p.x;
-    if (Math.abs(p.x - this.lastX) >= 6) {
-      this.lastX = p.x;
-      this.progressAt = now;
-      this.stuckReported = false;
-    } else if (p.grd && now - this.progressAt > 1500) {
-      f.jump = true;
-    }
-
-    if (now - this.progressAt > 8000) {
-      // 卡死不能永远钉在这。超时兜底还在，但这里提前把控制权交回。
-      if (!this.stuckReported) {
-        this.stuckReported = true;
-        this.ctx.event('stuck', { group: 'gather', x: Math.round(p.x), y: Math.round(p.y), dir: this.dir });
-      }
-      this.finished = true;
-      this.ctx.manager.set('idle');
-      return f;
-    }
-
-    const sign = this.dir === 'left' ? -1 : 1;
-    f[this.dir] = true;
-    f.aim = [sign * 1.6, 1.1]; // 前方脚下
-    f.use = true;
-    return f;
-  }
-
-  status() {
-    const now = Date.now();
-    return {
-      name: this.name,
-      dir: this.dir,
-      kind: this.kind,
-      leftMs: Math.max(0, this.startedAt + this.timeoutMs - now),
-      used: this.usedSlots(),
-    };
-  }
-}
-
-/** 开地图：朝一个方向走，撞墙就跳；超时写决策请求。 */
 export class ExploreMode extends Mode {
   constructor(ctx, params) { super(ctx, params); this.name = 'explore'; }
 
   enter() {
     const p = this.ctx.world.p;
-    this.dir = this.params.dir === 'left' || this.params.dir === 'right'
-      ? this.params.dir
-      : (p?.dir < 0 ? 'left' : 'right');
+    // 上次探索如果卡死，这次换相反方向：否则 autonomy 会一直把人往同一条死路里送。
+    const last = this.ctx.lastExplore;
+    const reverse = last && last.stuck && Date.now() - last.at < 60_000;
+    if (this.params.dir === 'left' || this.params.dir === 'right') {
+      this.dir = this.params.dir;
+    } else if (reverse) {
+      this.dir = last.dir === 'right' ? 'left' : 'right';
+    } else if (last && Date.now() - last.at < 60_000) {
+      this.dir = last.dir; // 刚超时但没卡住：继续同方向
+    } else {
+      this.dir = p?.dir < 0 ? 'left' : 'right';
+    }
     this.timeoutMs = this.params.timeoutMs ?? 45_000;
     this.startedAt = Date.now();
     this.startX = p?.x ?? null;
@@ -526,6 +461,8 @@ export class ExploreMode extends Mode {
   finish(type, extra = {}) {
     if (this.finished) return;
     this.finished = true;
+    // 记住方向 + 是否卡死，下一次 enter 决定是否掉头。
+    this.ctx.lastExplore = { dir: this.dir, at: Date.now(), stuck: type === 'stuck' };
     this.ctx.event(type, { group: 'explore', dir: this.dir, ...extra });
     this.ctx.manager.set('idle');
   }
@@ -550,7 +487,9 @@ export class ExploreMode extends Mode {
       this.stuckReported = false;
     }
 
-    const blocked = now - this.progressAt > 400;
+    // 400ms 太短：Terraria 的 1 格台阶按方向会自动抬上去，
+    // 等它抬完再决定要不要跳，否则在楼梯上一路乱蹦。
+    const blocked = now - this.progressAt > 900;
     f[this.dir] = true;
     if (p.grd && blocked && now - this.jumpAt > 300) {
       f.jump = true;
@@ -766,11 +705,12 @@ export class ModeManager {
       goto: (c, p) => new GotoMode(c, p),
       combat: (c, p) => new CombatMode(c, p),
       boss: (c, p) => new BossMode(c, p),
-      build: (c, p) => new BuildMode(c, p),
+      build: (c, p) => createBuildMode(c, p),
+      mine: (c, p) => new MineMode(c, p),
       replay: (c, p) => new ReplayMode(c, p),
       // 策略组
       survive: (c, p) => new SurviveMode(c, p),
-      gather: (c, p) => new GatherMode(c, p),
+      gather: (c, p) => createGatherMode(c, p),
       explore: (c, p) => new ExploreMode(c, p),
       hold: (c, p) => new HoldMode(c, p),
       fight: (c, p) => new FightMode(c, p),

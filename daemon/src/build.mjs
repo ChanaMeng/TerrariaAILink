@@ -98,6 +98,7 @@ export function createBuildMode(ctx, params = {}) {
       this.hpAt = Date.now();
 
       this.requestTiles();
+      this.tilesAt = Date.now();
 
       this.ctx.event('build_start', {
         total: this.plan.length,
@@ -371,6 +372,13 @@ export function createBuildMode(ctx, params = {}) {
         return;
       }
 
+      // 瓦片缓存是快照：自己刚放下去的方块要重新拉一次才看得见，
+      // 否则真机上「墙明明补上了，build 还报 not_placed」。
+      if (Date.now() - this.tilesAt > 1200) {
+        this.tilesAt = Date.now();
+        this.requestTiles();
+      }
+
       if (t.attempt === 0) this.startAttempt(t);
 
       this.aimAt(f, player, t);
@@ -401,6 +409,8 @@ export function createBuildMode(ctx, params = {}) {
           this.complete('failed');
           return;
         }
+        this.tilesAt = 0; // 重试前强制刷新一次，别拿旧快照判「没放上」
+        this.requestTiles();
         this.startAttempt(t);
       }
     },

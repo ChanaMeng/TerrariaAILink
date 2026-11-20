@@ -61,6 +61,9 @@ export class World {
     }
     for (const n of this.state?.n ?? []) {
       if (n.fr || n.lf <= 0 || (n.dm ?? 0) <= 0) continue;
+      // 普通怪不归闪避层管：闪避只躲弹幕和 Boss 的冲刺。
+      // 近战怪交给战斗组走位——否则贴脸时闪避会把 left/right 清零，站着挨打。
+      if (!n.bo) continue;
       const dx = n.x - p.x, dy = n.y - p.y;
       const contact = n.bo ? 90 : 45;
       if (dx * dx + dy * dy > contact * contact) continue;
