@@ -8,6 +8,7 @@
 // 之后接工厂时再 import 这里的 createGatherMode 即可。
 // 鸭子类型：{ name, allowDodge, enter, tick, exit, status }。
 import { neutral } from './proto.mjs';
+import { standNear } from './walk.mjs';
 
 const PX = 16;              // 1 格 = 16px（和 modes.mjs 一致）
 const SCAN_TILES = 24;      // 选目标半径（格），也是 2–24 格的上限
@@ -211,9 +212,17 @@ class GatherMode {
     }
   }
 
-  /** 目标还在 3 格外：水平朝它走；在上方且不远就跳；卡 1.5s 也跳一下。 */
+  /** 目标还在 3 格外：先问寻路，走到目标旁边的站格；没路才退回水平走。 */
   approach(p, f, now) {
     const t = this.target;
+
+    // 树/矿格本身通常不能站，先找它旁边能站的一格再走。
+    if (this.ctx.walker && this.ctx.grid) {
+      const stand = standNear(this.ctx.grid, t.tx, t.ty, 3);
+      const frame = this.ctx.walker.to(p, stand.x, stand.y);
+      if (frame) return frame;
+    }
+
     const cx = (t.tx + 0.5) * PX;
     const cy = (t.ty + 0.5) * PX;
     const dx = cx - p.x;
@@ -227,6 +236,7 @@ class GatherMode {
       f.jump = true;
       this.jumpAt = now;
     }
+    return f;
   }
 
   /** 目标在 3 格内：aim 目标格中心并 use。 */
@@ -331,8 +341,8 @@ class GatherMode {
     }
 
     // 7) 接近 or 采集
-    if (this.targetDist(p) > REACH_TILES) this.approach(p, f, now);
-    else this.harvest(p, f, now);
+    if (this.targetDist(p) > REACH_TILES) return this.approach(p, f, now);
+    this.harvest(p, f, now);
     return f;
   }
 

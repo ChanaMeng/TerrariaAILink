@@ -466,8 +466,11 @@ export function createAutonomy(ctx = null, options = {}) {
     if (!p) return { at: now, skipped: 'no_state' };
     if (p.dead) return { at: now, skipped: 'dead' };
 
-    // 3) 守护层 / 别的组正在跑：不抢
-    if (current != null && !AUTONOMY_GROUPS.includes(current)) {
+    // 3) 守护层 / 别的组正在跑：不抢。
+    // 例外：主人刚写了 {"group":"auto"}，而当前是 release（松手）——
+    // release 不是「别人在跑」，是「没人接管」，这时该由 autonomy 接手。
+    const foreign = current != null && !AUTONOMY_GROUPS.includes(current);
+    if (foreign && !(reclaiming && current === 'release')) {
       return { at: now, skipped: 'foreign_group', current };
     }
 

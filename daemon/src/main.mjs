@@ -7,6 +7,8 @@ import {
   applyPolicy, knownGroups, readPolicy, requestDecision, watchPolicy,
 } from './policy.mjs';
 import { createAutonomy } from './autonomy.mjs';
+import { createGrid } from './grid.mjs';
+import { createWalker } from './walk.mjs';
 
 const world = new World();
 const client = new ModClient();
@@ -86,6 +88,10 @@ const ctx = {
     };
   },
 };
+
+// 地图与寻路：grid 维护二维栅格，walker 把 A* 路径翻译成方向键。
+ctx.grid = createGrid();
+ctx.walker = createWalker(ctx);
 
 // ---------------------------------------------------------------------------
 // 决策请求
