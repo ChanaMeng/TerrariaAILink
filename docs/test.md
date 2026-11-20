@@ -50,7 +50,20 @@
 
 > 2026-11-20 补充：TC-28 抓到真 bug——`CombatMode` 的树用了 `selector`，选完目标就短路，**移动/瞄准/攻击从来没执行过**。已改 `sequence` 并加回归测试。
 
-## 4. 回归清单（每次改 mod 或 daemon 后过一遍）
+## 4. M3 真机用例（2026-11-20 夜）
+
+| ID | 用例 | 期望 | 结果 | 证据 |
+| --- | --- | --- | --- | --- |
+| TC-30 | 寻路走楼梯 | 从平地走到 2 格台阶上方，不 stuck | ✅ | 25 秒右移 284px、爬 2 格 |
+| TC-31 | gather 砍树 | 选树 → 走到 3 格内 → 切斧 → hits ≥ 1 | ✅ | `hits:1`，`held 铁斧` |
+| TC-32 | build 放置 | placed ≥ 1，existing 被跳过 | ✅ | `placed:1, existing:2` |
+| TC-33 | mine 挖格 | 目标格变空 | ✅ | 门洞挖通（`null` 瓦片误判已修） |
+| TC-34 | autonomy 接管 | 从 `release` 写 `auto` 后 1.5s 内切组 | ✅ | `release → gather` |
+| TC-35 | 控制权归还 | `release` 后 250ms 内键盘恢复 | ✅ | 主人实测 |
+
+> 真机还证伪了三件事：`combat` 的树原来用 `selector` 从不移动/攻击；闪避层会为贴脸近战怪清零左右；`build` 用旧瓦片快照判「没放上」。都已修。
+
+## 5. 回归清单（每次改 mod 或 daemon 后过一遍）
 
 1. 起 daemon → `link_up`，`brief` 有玩家坐标
 2. `mv left` / `mv right` 各 0.5s → 位移方向正确
@@ -62,8 +75,10 @@
 8. `cd daemon; node --test` → 44 条全绿
 9. 写 `daemon/state/policy.json` → 200ms 内 `status.mode.name` 跟着变
 10. `brief` → 一屏中文，无 `undefined` / `NaN`
+11. 写 `policy.json` 的 `{"group":"auto"}` → 1.5s 内 autonomy 切组，位置开始变
+12. `release` 后 1 秒内按键盘 → 角色响应（控制权真的还了）
 
-## 5. 记录格式
+## 6. 记录格式
 
 新增一条用这个格式，写完跑一次，把输出贴进「证据」：
 
@@ -77,7 +92,7 @@
 - 结论：通过 / 不通过 / 部分
 ```
 
-## 6. 已知不可测 / 不能测
+## 7. 已知不可测 / 不能测
 
 - **声音**：没有音频通道，任何「听到」都是推断。
 - **连续动作的观感**：只能看抽帧，不能判断「手感」。
