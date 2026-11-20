@@ -244,6 +244,8 @@ class GatherMode {
     const t = this.target;
     f.aim = [((t.tx + 0.5) * PX - p.x) / PX, ((t.ty + 0.5) * PX - p.y) / PX];
     f.use = true;
+    // 树要用斧、矿要用镐：工具格由上层给（params.slot），不给就用手持。
+    if (this.params.slot != null) f.slot = this.params.slot;
     // 站着挥也是进展：不刷新的话 8 秒后会被自己判成卡死。
     this.lastX = p.x;
     this.progressAt = now;
