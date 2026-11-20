@@ -1,5 +1,8 @@
 ﻿# 一键把鲸白送进世界：起客户端 → 必要时点角色 → 起 daemon → 报状态
 # 前提：主人已经在主客户端里 "建立并游玩"，7777 在监听。
+# 用法：双击 启动鲸白.cmd；或 pwsh -File start-whale.ps1 -DryRun 只做安全检查
+
+param([switch]$DryRun)
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -36,6 +39,25 @@ public static void ClickClient(IntPtr h, int x, int y) {
 
 function Say($msg) { Write-Host "[鲸白] $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "[鲸白] $msg" -ForegroundColor Yellow }
+
+# ---- 0. 主档是不是把 mod 开起来了 ----
+# 主档一启用 TerrariaAILink 就会抢 17890，daemon 会接到主人的角色上（2026-11-20 真踩过）。
+# 这一步只读 enabled.json，不改任何东西。
+$mainProfile = Join-Path $env:USERPROFILE 'Documents\My Games\Terraria\tModLoader'
+$mainEnabled = Join-Path $mainProfile 'Mods\enabled.json'
+if (Test-Path -LiteralPath $mainEnabled) {
+  $rawMods = Get-Content -LiteralPath $mainEnabled -Raw
+  if ($rawMods -match 'TerrariaAILink') {
+    Warn '主档启用了 TerrariaAILink —— 它会抢 17890，鲸白会接到你的角色上。'
+    Warn "先关掉：tModLoader 主菜单 → 模组 → 禁用 TerrariaAILink，或把 $mainEnabled 改成 []"
+    Read-Host '按回车关闭'
+    exit 1
+  }
+  Say '主档 mod 已关，17890 不会被抢。'
+} else {
+  Say '找不到主档 mod 列表，按「没开」处理。'
+}
+if ($DryRun) { Say '检查完成（DryRun，不启动客户端）。'; exit 0 }
 
 # ---- 0. 主世界开好了吗 ----
 $host7777 = Get-NetTCPConnection -State Listen -LocalPort 7777 -ErrorAction SilentlyContinue
